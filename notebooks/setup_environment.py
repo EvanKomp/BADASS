@@ -22,7 +22,6 @@ def setup_environment(notebook_globals):
         os.path.join(parent_dir, "utils"),
         os.path.join(parent_dir, "training"),
         os.path.join(parent_dir, "mld"),
-        os.path.join(parent_dir, "mld/libdesign"),
         os.path.join(parent_dir, "models"),
         
     ]
@@ -50,12 +49,14 @@ def setup_environment(notebook_globals):
     import seq2fitness_train
     import seq2fitness_traintools
     import seq2fitness_models
+    import sequence_sampler
 
     # Add imported modules to notebook_globals
     notebook_globals['sequence_utils'] = sequence_utils
     notebook_globals['train'] = seq2fitness_train
     notebook_globals['traintools'] = seq2fitness_traintools
     notebook_globals['seq2fitness_models'] = seq2fitness_models
+    notebook_globals['sequence_sampler'] = sequence_sampler
 
     # Define additional strings or variables if needed
     ref_seq_amylase = """LTAPSIKSGTILHAWNWSFNTLKHNMKDIHDAGYTAIQTSPINQVKEGNQGDKSMSNWYWLYQPTSYQIGNRYLGTEQEFKEMCAAAEEYGIKVIVDAVINHTTSDYAAIS

@@ -1,10 +1,26 @@
 import re
 import torch
-
 import random
+import numpy as np
 
 AMINO_ACIDS = 'ACDEFGHIKLMNPQRSTVWY' # 20 canonical amino acids
 AA_TO_IDX = {aa:idx for idx, aa in enumerate(AMINO_ACIDS)}
+EPS = 1e-10
+
+def generate_single_mutants(ref_seq, sites_to_exclude=[]):
+    mutants = []
+    L = len(ref_seq)  # Length of the reference sequence
+
+    for i, original_aa in enumerate(ref_seq):
+        site = i + 1  # 1-based site index
+        if site in sites_to_exclude:
+            continue  # Skip sites that are in the exclusion list
+
+        for aa in AMINO_ACIDS:
+            if aa != original_aa:  # Only consider mutations
+                mutant = f"{original_aa}{site}{aa}"
+                mutants.append(mutant)
+    return mutants
 
 def pseudolikelihood_ratio(rel_seq, ref_seq, logits):
     # rel_seq is a dictionary {site: aa}, and ref_seq is an absolute sequence in a string. Logits are (L, 20).
@@ -533,3 +549,66 @@ def one_hot_encode_seq(sequence, flatten=True):
         x = x.flatten()
 
     return x
+
+def compute_Neff_for_probmatrix(p):
+    def compute_Neff(sorted_p):
+        n = len(sorted_p)
+        x = np.sum(sorted_p * np.arange(1, n + 1))
+        Neff = 2 * x - 1
+        return Neff
+
+    if len(p.shape) == 1:
+        # p is a vector
+        sorted_p = np.sort(p)[::-1]  # Sort in descending order
+        Neff = compute_Neff(sorted_p)
+        return {"Neff": Neff}
+    elif len(p.shape) == 2:
+        # p is a matrix (joint probability distribution)
+
+        # Flatten the matrix and compute Neff
+        flattened_p = p.flatten()
+        sorted_flattened_p = np.sort(flattened_p)[::-1]
+        Neff = compute_Neff(sorted_flattened_p)
+
+        # Compute Neff for the marginal distribution of columns
+        marginal_cols = np.sum(p, axis=0)
+        sorted_marginal_cols = np.sort(marginal_cols)[::-1]
+        Neff_cols = compute_Neff(sorted_marginal_cols)
+
+        # Compute Neff for the marginal distribution of rows
+        marginal_rows = np.sum(p, axis=1)
+        sorted_marginal_rows = np.sort(marginal_rows)[::-1]
+        Neff_rows = compute_Neff(sorted_marginal_rows)
+
+        return {"Neff": Neff, "Neff_cols": Neff_cols, "Neff_rows": Neff_rows}
+    else:
+        raise ValueError("Input p must be a 1D or 2D numpy array.")
+
+def create_score_matrix(reference_sequence, single_mutants, ml_scores, wt_scores = 0.0):
+    """
+    Create a score matrix from single mutant strings and their corresponding ML scores.
+
+    Args:
+        reference_sequence (str): Wild-type sequence.
+        single_mutants (list[str]): List of single mutants in the format 'A456Y'.
+        ml_scores (np.ndarray): Array of ML scores corresponding to the single mutants.
+        wt_scores (float): the default value of wild type scores.
+
+    Returns:
+        np.ndarray: Score matrix of shape (20, L), where L is the length of the reference sequence.
+    Note that because only single mutants are found, the wildtype scores are set to the default of zero.
+    """
+    # Initialize score matrix
+    L = len(reference_sequence)
+    score_matrix = np.ones((20, L))*wt_scores
+
+    # Fill the score matrix
+    for mutant, score in zip(single_mutants, ml_scores):
+        wt_aa = mutant[0]
+        site = int(mutant[1:-1]) - 1  # Convert to 0-based index
+        mut_aa = mutant[-1]
+        #wt_idx = AA_TO_IDX[wt_aa]
+        mut_idx = AA_TO_IDX[mut_aa]
+        score_matrix[mut_idx, site] = score
+
+    return score_matrix
