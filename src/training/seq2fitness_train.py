@@ -116,13 +116,6 @@ def main(model_params, training_params, model_class="ProteinFunctionPredictor_wi
     if model_class == "ProteinFunctionPredictor_with_probmatrix":
         print(f"Creating model of class ProteinFunctionPredictor_with_probmatrix.")
         model = ProteinFunctionPredictor_with_probmatrix(model_params)
-    # elif model_class == "GelmanCNN":
-    #     print(f"Creating model of class GelmanCNN")
-    #     model = GelmanCNN(model_params)
-    #
-    # elif model_class == "VectorAttentionModel":
-    #     print(f"Creating model of class VectorAttentionModel")
-    #     model = VectorAttentionModel(model_params)
     else:
         raise ValueError(f"Unknown model class: {model_class}")
 
@@ -135,12 +128,16 @@ def main(model_params, training_params, model_class="ProteinFunctionPredictor_wi
     dataframe = pd.read_csv(training_params['dataset_path'], keep_default_na=False, na_values=[""])
     task_columns = list(model_params['task_criteria'].keys())
     ref_seq = model_params['ref_seq']
+
+    normalize_labels = model_params.get('normalize_labels', True)
     train_loader, val_loader, task_means, task_stds = load_data(dataframe, task_columns,
-                                                                batch_size=training_params.get('batch_size', 256))
-    task_stats = {'task_means': task_means, 'task_stds': task_stds}
-    print(f"Task stats used for normalization are : {task_stats}.")
-    model_params['task_stats'] = task_stats
-    model.set_task_stats(model_params['task_stats'])
+                                                                batch_size=training_params.get('batch_size', 256),
+                                                               normalize_labels = normalize_labels)
+    if normalize_labels:
+        task_stats = {'task_means': task_means, 'task_stds': task_stds}
+        print(f"Task stats used for normalization are : {task_stats}.")
+        model_params['task_stats'] = task_stats
+        model.set_task_stats(model_params['task_stats'])
 
     # Get training parameters to simplify code later
     epochs = training_params.get('epochs', 100)
