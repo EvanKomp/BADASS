@@ -14,7 +14,7 @@ import pandas as pd
 from seq2fitness_models import ProteinFunctionPredictor_with_probmatrix
 from seq2fitness_traintools import ModelTrainer
 from datasets import ProteinDataset
-from sequence_utils import dedupe_and_map_sites_to_seqs, split_by_sequence
+from sequence_utils import split_by_sequence
 
 def calculate_task_statistics(dataframe, task_columns):
     """
