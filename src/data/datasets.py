@@ -1,7 +1,3 @@
-"""
-Written by Japheth Gado and Carlos Gomez-Uribe
-(C) Solugen Inc., 2024
-"""
 from torch.utils.data import Dataset
 import torch
 from torch import tensor, stack, cat, float16, long
