@@ -24,6 +24,10 @@ To install the package, follow these steps:
    ```bash
    pip install -r requirements.txt
 
+## License
+
+This project is licensed under the [Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
+
 ## Usage
 
 This package comes with two example Jupyter notebooks located in the `notebooks` folder, using the **Alpha Amylase dataset** as an example, to help you get started:
