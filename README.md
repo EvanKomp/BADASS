@@ -36,7 +36,7 @@ This package comes with example Jupyter notebooks, located in the `notebooks` fo
 
 1. **[Train_Seq2Fitness_Models.ipynb](notebooks/Train_Seq2Fitness_Models.ipynb)**: This notebook demonstrates how to train the Seq2Fitness models by leveraging evolutionary and experimental data to build fitness prediction models, using the alpha-amylase dataset.
    
-2. **[Run_BADASS_Alpha_Amylase.ipynb](notebooks/Run_BADASS_Alpha_Amylase.ipynb)**: This notebook shows how to use BADASS for protein sequence optimization, either using **ESM2** alone or in combination with the trained Seq2Fitness models, with the alpha-amylase dataset.
+2. **[Run_BADASS_Alpha_Amylase.ipynb](notebooks/Run_BADASS_Alpha_Amylase.ipynb)**: This notebook shows how to use BADASS for protein sequence optimization for alpha amylase, either using a Seq2Fitness models or **ESM2** scores alone.
 
 
 
