@@ -32,7 +32,7 @@ This work is licensed under the [Creative Commons Attribution-NonCommercial 4.0 
 
 ## Usage
 
-This package comes with example Jupyter notebooks, located in the `notebooks` folder, to train Seq2Fitness models and run the BADASS optimizer with both ESM2 and Seq2Fitness, using the **Alpha Amylase** and **NucB** datasets. The main notebooks to use the code include:
+This package comes with example Jupyter notebooks, located in the `notebooks` folder, to train Seq2Fitness models and run the BADASS optimizer with both ESM2 and Seq2Fitness, using the **[Alpha Amylase[(https://doi.org/10.1016/j.csbj.2024.09.007)** and **[NucB](https://doi.org/10.1101/2024.03.21.585615)** datasets. The main notebooks to use the code include:
 
 1. **[Train_Seq2Fitness_Models.ipynb](notebooks/Train_Seq2Fitness_Models.ipynb)**: This notebook demonstrates how to train the Seq2Fitness models by leveraging evolutionary and experimental data to build fitness prediction models, using the alpha-amylase dataset.
    
