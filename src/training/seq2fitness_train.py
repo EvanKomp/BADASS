@@ -1,7 +1,3 @@
-"""
-Written by Japheth Gado and Carlos Gomez-Uribe
-(C) Solugen Inc., 2024
-"""
 import torch
 from torch.utils.data import DataLoader
 from torch.nn import DataParallel
