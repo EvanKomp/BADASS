@@ -1,5 +1,7 @@
 # BADASS - Designing diverse and high-performance proteins with a large language model in the loop
 
+[![CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+
 ## Introduction
 
 BADASS package introduces a novel approach to protein engineering through directed evolution with machine learning, integrating two key components: **Seq2Fitness**, a semi-supervised neural network model for predicting protein fitness, and **BADASS** (Biphasic Annealing for Diverse Adaptive Sequence Sampling), an optimization algorithm for efficient sequence exploration.
@@ -26,7 +28,7 @@ To install the package, follow these steps:
 
 ## License
 
-This project is licensed under the [Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
+This work is licensed under the [Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
 
 ## Usage
 
