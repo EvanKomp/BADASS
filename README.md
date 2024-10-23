@@ -45,7 +45,9 @@ Seq2Fitness and BADASS enable protein engineering, with potential applications i
 We urge researchers and practitioners to adopt ethical practices and adhere to established biosecurity and biosafety guidelines when using Seq2Fitness and BADASS. These tools are intended to accelerate the discovery of beneficial proteins and should not be used, e.g., to engineer harmful biological agents or pathogens. In this context, we emphasize the importance of:
 
 a) Responsible Application: The models presented in this paper should be used to advance scientific research and industrial applications that contribute to public good, such as improving sustainability or developing therapeutic proteins. Any deviation from these intended uses risks undermining the positive potential of this technology.
+
 b) Adherence to Regulatory Frameworks: Researchers are responsible for ensuring that their work complies with both local and international laws and regulations governing synthetic biology, protein engineering, and biotechnology. This includes adhering to ethical guidelines that prioritize safety, security, and the prevention of harm.
+
 c) Promoting Biosecurity: With the rise of open science, sharing tools like Seq2Fitness and BADASS openly can advance research, but it also necessitates careful consideration of biosecurity risks. We encourage researchers to take proactive measures to prevent misuse, including reviewing biosecurity risks as part of their research design and ensuring that any applications align with responsible research practices ￼ ￼.
 
 We believe that through transparent, responsible, and ethically-guided research, the scientific community can maximize the benefits of advanced protein engineering while mitigating potential risks. We hope that this work contributes to sustainable advancements in biotechnology and encourages further dialogue on the ethical dimensions of protein design.
