@@ -22,9 +22,9 @@ To install the package, follow these steps:
 2. Navigate to the project directory:
    ```bash
    cd BADASS
-3. Install dependencies:
+3. Install dependencies and the package:
    ```bash
-   pip install -r requirements.txt
+   pip install .
 
 ## License
 
