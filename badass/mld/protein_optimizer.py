@@ -13,7 +13,7 @@ from badass.utils.sequence_utils import AA_TO_IDX
 @dataclass
 class BaseOptimizerParams:
     """Parameters for the base protein sequence optimizer."""
-    ref_sequence: str
+    ref_seq: str
     score_threshold: Optional[float] = 35
     reversal_threshold: Optional[float] = 0.0
     ref_score_value: Optional[float] = None
@@ -54,7 +54,7 @@ class BaseProteinOptimizer(abc.ABC):
 
     Attributes:
         params (BaseOptimizerParams): Parameters controlling the optimization process
-        ref_sequence (str): Reference/wild-type sequence, set by setup_model()
+        ref_seq (str): Reference/wild-type sequence, set by setup_model()
         sampler (CombinatorialMutationSampler): Handles sequence mutation and sampling
         score_matrix (np.ndarray): Current score matrix for mutation sampling
         initial_score_matrix (np.ndarray): Original score matrix from single mutants
@@ -149,7 +149,7 @@ class BaseProteinOptimizer(abc.ABC):
         self.params = params
         self._setup_optimizer_params()
         self._set_seeds()
-        self.ref_sequence = self.params.ref_sequence
+        self.ref_seq = self.params.ref_seq
         
         # Initialize tracking attributes
         self.all_sequences = []
@@ -192,7 +192,7 @@ class BaseProteinOptimizer(abc.ABC):
         
         # Initialize sampler
         self.sampler = CombinatorialMutationSampler(
-            sequence=self.ref_sequence,
+            sequence=self.ref_seq,
             forbidden_sites=self.params.sites_to_ignore,
             temperature=self.params.T,
             sampling="boltzmann",
@@ -202,7 +202,7 @@ class BaseProteinOptimizer(abc.ABC):
     
     @abc.abstractmethod
     def setup_model(self):
-        """Set up the scoring model and set self.ref_sequence."""
+        """Set up the scoring model and set self.ref_seq."""
         pass
         
     @abc.abstractmethod 
@@ -243,11 +243,11 @@ class BaseProteinOptimizer(abc.ABC):
 
     def _compute_single_mutant_scores(self) -> np.ndarray:
         """Compute score matrix for all single mutants."""
-        L = len(self.ref_sequence)
+        L = len(self.ref_seq)
         score_matrix = np.zeros((20, L))
         
         single_mutants = []
-        for i, original_aa in enumerate(self.ref_sequence):
+        for i, original_aa in enumerate(self.ref_seq):
             site = i + 1
             if site in self.params.sites_to_ignore:
                 continue

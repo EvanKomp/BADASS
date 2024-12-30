@@ -32,12 +32,37 @@ class ProteinOptimizerParams(BaseOptimizerParams):
     """Parameters for protein sequence optimization using either ESM or Seq2Fitness."""
     # Model selection and configuration
     esm_only: bool = False
-    model_checkpoint_path: Optional[Path] = None 
-    esm_model_name: str = "esm2_t33_650M_UR50D"
-    esm_score_weights: Dict[str, float] = field(
-        default_factory=lambda: {"mutant": 0.5, "reference": 0.5}
-    )
-    task_weights: Optional[Dict[str, float]] = None
+    model_checkpoint_path: Optional[str] = None
+    model_params: Optional[Dict] = None
+    score_matrix: Optional[np.ndarray] = None
+    esm_modelname: str = 'esm1b_t33_650M_UR50S'
+    esm_score_weights: Dict = field(default_factory=lambda: {'mutant': 0.5, 'reference': 0.5})
+    
+    @classmethod
+    def from_dict(cls, optimizer_params: Dict, 
+                 model_params: Optional[Dict] = None,
+                 model_checkpoint_path: Optional[str] = None,
+                 esm_only: bool = False,
+                 score_matrix: Optional[np.ndarray] = None,
+                 simple_simulated_annealing: bool = False, 
+                 cool_then_heat: bool = False) -> 'ProteinOptimizerParams':
+        """Create params instance from original API arguments."""
+        # Start with optimizer_params dict
+        params_dict = optimizer_params.copy()
+        
+        # Add the additional parameters
+        params_dict.update({
+            'model_params': model_params,
+            'model_checkpoint_path': model_checkpoint_path,
+            'esm_only': esm_only,
+            'score_matrix': score_matrix,
+            'simple_simulated_annealing': simple_simulated_annealing,
+            'cool_then_heat': cool_then_heat
+        })
+        if 'ref_seq' in model_params:
+            params_dict['ref_seq'] = model_params['ref_seq']
+        
+        return cls(**params_dict)
 
 class ProteinOptimizer(BaseProteinOptimizer):
     """Protein sequence optimizer using either ESM or Seq2Fitness models.
@@ -45,9 +70,28 @@ class ProteinOptimizer(BaseProteinOptimizer):
     This class implements the model-specific logic while inheriting the core
     optimization functionality from BaseProteinOptimizer.
     """
-    def __init__(self, params: ProteinOptimizerParams):
-        """Initialize optimizer with either ESM or Seq2Fitness setup."""
-        self.params = params
+    def __init__(self, optimizer_params: Dict, 
+                 model_params: Optional[Dict] = None,
+                 model_checkpoint_path: Optional[str] = None,
+                 esm_only: bool = False,
+                 score_matrix: Optional[np.ndarray] = None,
+                 simple_simulated_annealing: bool = False,
+                 cool_then_heat: bool = False):
+        """Initialize with original API while using new structure."""
+        
+        # Convert original API arguments to our params dataclass
+        params = ProteinOptimizerParams.from_dict(
+            optimizer_params=optimizer_params,
+            model_params=model_params,
+            model_checkpoint_path=model_checkpoint_path,
+            esm_only=esm_only,
+            score_matrix=score_matrix,
+            simple_simulated_annealing=simple_simulated_annealing,
+            cool_then_heat=cool_then_heat
+        )
+        
+        # Initialize with new params structure while maintaining original API
+        super().__init__(params)
         
         # Setup GPU devices
         self.num_gpus = torch.cuda.device_count()
@@ -76,7 +120,7 @@ class ProteinOptimizer(BaseProteinOptimizer):
         
     def _setup_esm_model(self):
         """Initialize ESM model and compute reference logits."""
-        self.model, self.alphabet = eval(f'esm.pretrained.{self.params.esm_model_name}()')
+        self.model, self.alphabet = eval(f'esm.pretrained.{self.params.esm_modelname}()')
         self.aa_indices = [self.alphabet.get_idx(aa) for aa in AMINO_ACIDS]
         
         # Freeze model parameters
@@ -141,9 +185,9 @@ class ProteinOptimizer(BaseProteinOptimizer):
         mutant_scores, ref_scores = [], []
         for seq_idx, rel_seq_tensor in enumerate(rel_seqs_tensors):
             mut_score = pseudolikelihood_ratio_from_tensor(
-                rel_seq_tensor, self.ref_sequence, logits[seq_idx, :, :].squeeze())
+                rel_seq_tensor, self.ref_seq, logits[seq_idx, :, :].squeeze())
             ref_score = pseudolikelihood_ratio_from_tensor(
-                rel_seq_tensor, self.ref_sequence, self.wt_logits)
+                rel_seq_tensor, self.ref_seq, self.wt_logits)
             
             mutant_scores.append(mut_score)
             ref_scores.append(ref_score)
@@ -158,7 +202,7 @@ class ProteinOptimizer(BaseProteinOptimizer):
         rel_seqs_list = [rel_seqs_dict[key] for key in sorted(rel_seqs_dict)]
         
         # Convert to absolute sequences for tokenization 
-        abs_seqs = [apply_mutations(self.ref_sequence, rel_seq) for rel_seq in rel_seqs_list]
+        abs_seqs = [apply_mutations(self.ref_seq, rel_seq) for rel_seq in rel_seqs_list]
         
         # Tokenize sequences
         batch_labels, batch_strs, batch_tokens = self.tokenizer(
@@ -310,7 +354,7 @@ class ProteinOptimizer(BaseProteinOptimizer):
 #             if model_params is None:
 #                 raise ValueError("model_params must be provided for ESM only inference with model name, ref seq and (optionally) weights.")
 #             self.ref_seq = model_params.get('ref_seq')
-#             self.esm_model_name = model_params.get('esm_modelname', 'esm2_t33_650M_UR50D')
+#             self.esm_modelname = model_params.get('esm_modelname', 'esm2_t33_650M_UR50D')
 #             self.esm_score_weights = model_params.get('esm_score_weights', None)
 #             self._initialize_esm_model(model_params)
 #         else:
@@ -361,7 +405,7 @@ class ProteinOptimizer(BaseProteinOptimizer):
 #         Args:
 #             model_params (dict): Dictionary containing model parameters for ESM-only inference.
 #         """
-#         self.model, self.alphabet = eval(f'esm.pretrained.{self.esm_model_name}()')
+#         self.model, self.alphabet = eval(f'esm.pretrained.{self.esm_modelname}()')
 #         self.aa_indices = [self.alphabet.get_idx(aa) for aa in AMINO_ACIDS]
 #         for param in self.model.parameters():
 #             param.requires_grad = False

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from badass.models.seq2fitness_models import ProteinFunctionPredictor_with_probmatrix
 from badass.training.seq2fitness_traintools import ModelTrainer
-from badass.datasets import ProteinDataset
+from badass.data.datasets import ProteinDataset
 from badass.utils.sequence_utils import split_by_sequence
 
 def calculate_task_statistics(dataframe, task_columns):
