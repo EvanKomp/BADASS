@@ -7,7 +7,7 @@ import pandas as pd
 import esm
 
 eps = 1e-8
-from sequence_utils import AMINO_ACIDS, AA_TO_IDX
+from badass.utils.sequence_utils import AMINO_ACIDS, AA_TO_IDX
 
 class ProteinFunctionPredictor_with_probmatrix(nn.Module):
     """
