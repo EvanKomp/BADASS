@@ -62,6 +62,22 @@ class ArbitraryPredictorOptimizer:
         
         logger.info("Initializing sequence sampler...")
         self.sampler = self._initialize_sampler()
+
+        # Add phase transition tracking
+        self.active_phase_transition = False
+        self.first_phase_transition = None
+        self.initial_score = None
+        self.last_high_score = float('-inf')
+        self.last_high_var = float('-inf')
+        self.last_phase_transition = None
+        self.num_phase_transitions = []  # Track per iteration
+        self.patience_phase_trans = self.params.get('patience_phase_trans', 3)
+        self.patience = self.params.get('patience', 10)
+        if self.params['num_mutations'] > 3:
+            self.patience += self.patience_phase_trans
+            self.heating_rate = 1.4
+        else:
+            self.heating_rate = 1.6
         
     def _set_default_params(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Sets default parameters if not provided."""
@@ -72,9 +88,30 @@ class ArbitraryPredictorOptimizer:
             'cooling_rate': 0.95,
             'num_mutations': 1,
             'forbidden_sites': [],
-            'batch_size': 32
+            'batch_size': 32,
+            'score_threshold': None,  # Will be set after initial scoring
+            'reversal_threshold': None,  # Will be set after initial scoring
+            'patience_phase_trans': 10,  # Increased from 3 to match ProteinOptimizer
+            'patience': 10,
+            'heating_rate': 1.4,
+            'simple_simulated_annealing': False,
+            'cool_then_heat': False,
+            'boost_mutations_with_high_variance': True,
+            'gamma': 0.5  # For variance boosting
         }
-        return {**defaults, **params}
+        params_with_defaults = {**defaults, **params}
+        
+        # Set temperature thresholds for different strategies
+        params_with_defaults['low_temp_threshold'] = 0.02
+        params_with_defaults['high_temp_threshold'] = 1.6
+        
+        # Initialize heating/cooling phase variables
+        if params_with_defaults['cool_then_heat']:
+            params_with_defaults['heating_phase'] = False
+            params_with_defaults['cooling_iterations'] = 0
+            params_with_defaults['heating_iterations'] = 0
+        
+        return params_with_defaults
     
     def _initialize_sampler(self) -> CombinatorialMutationSampler:
         """Initializes the sequence sampler with current parameters."""
@@ -192,27 +229,152 @@ class ArbitraryPredictorOptimizer:
         
         return scores
     
-    def update_temperature(self, iteration: int, num_sequences: int):
-        """Updates temperature based on current state."""
-        old_T = self.params['T']
-        if num_sequences < 0.5 * self.params['seqs_per_iter']:
-            self.params['T'] *= 1.2
-            logger.debug(f"Temperature increased: {old_T:.3f} -> {self.params['T']:.3f}")
-        else:
-            self.params['T'] *= self.params['cooling_rate']
-            logger.debug(f"Temperature cooled: {old_T:.3f} -> {self.params['T']:.3f}")
-    
-    def optimize(self) -> Dict[str, Any]:
+    def detect_phase_transition(self, i: int):
         """
-        Runs the optimization process.
+        Enhanced phase transition detection incorporating score variance.
         
+        Parameters:
+        -----------
+        i : int
+            Current iteration number
+        """
+        cur_mean_avg = np.mean(self.mean_scores[-5:])
+        cur_var_avg = np.mean(self.score_variances[-5:])
+        self.last_high_var = max(np.convolve(self.score_variances, np.ones(5)/5, mode='valid'))
+        
+        # Enhanced detection criteria using both mean and variance
+        if cur_mean_avg > self.params['score_threshold']:
+            self.last_phase_transition = i
+            self.last_high_score = max(np.convolve(self.mean_scores, np.ones(5)/5, mode='valid'))
+            logger.info(f"Phase transition detected. High score avg: {self.last_high_score:.3g}, "
+                       f"high var: {self.last_high_var:.3g}")
+            self.active_phase_transition = True
+            self.num_phase_transitions.append(self.num_phase_transitions[-1] + 1 if self.num_phase_transitions else 1)
+            
+            if self.first_phase_transition is None:
+                self.first_phase_transition = i
+                self.initial_var = np.mean(self.score_variances)
+                logger.info(f"First phase transition detected at iteration {i}")
+                logger.info(f"Initial variance: {self.initial_var:.3g}")
+            
+            logger.info(f"Will start increasing temperature in {self.params['patience_phase_trans']} iterations "
+                       "unless phase reversal is detected")
+        else:
+            self.num_phase_transitions.append(self.num_phase_transitions[-1] if self.num_phase_transitions else 0)
+
+    def detect_phase_transition_reversal(self, i: int) -> bool:
+        """
+        Enhanced phase transition reversal detection using both score and variance.
+        
+        Parameters:
+        -----------
+        i : int
+            Current iteration number
+            
         Returns:
         --------
-        Dict[str, Any]
-            Optimization results and statistics
+        bool
+            True if phase transition has reversed
         """
+        cur_var_avg = np.mean(self.score_variances[-2:])
+        cur_mean_avg = np.mean(self.mean_scores[-2:])
+        
+        # Check both score threshold and variance conditions
+        if cur_mean_avg < self.params['reversal_threshold']:
+            logger.info("Phase transition reversal detected based on score threshold")
+            self.active_phase_transition = False
+            return True
+            
+        if (i > self.last_phase_transition + self.params['patience']):
+            logger.info("Phase transition stopped due to patience timeout")
+            self.active_phase_transition = False
+            return True
+            
+        return False
+    
+    def update_temperature(self, iteration: int, num_sequences: int):
+        """
+        Update temperature based on current state and phase transitions.
+        More sophisticated version matching ProteinOptimizer's approach.
+        
+        Parameters:
+        -----------
+        iteration : int
+            Current iteration number
+        num_sequences : int
+            Number of sequences in current iteration
+        """
+        old_T = self.params['T']
+        
+        # Prevent temperature from getting too low
+        if self.params['T'] < 0.01:
+            self.params['T'] *= 1.4
+            logger.debug(f"Temperature increased (too low): {old_T:.3f} -> {self.params['T']:.3f}")
+            return
+            
+        # Increase temperature if too few sequences
+        if num_sequences < 0.5 * self.params['seqs_per_iter']:
+            if self.params['T'] < 10 * self.params['T']:
+                self.params['low_temp_threshold'] = self.params['T'] * 1.10
+                self.params['T'] *= 1.4
+                logger.debug(f"Temperature increased (few sequences): {old_T:.3f} -> {self.params['T']:.3f}")
+            return
+        
+        # Handle different temperature strategies
+        if self.params['simple_simulated_annealing']:
+            self.params['T'] *= self.params['cooling_rate']
+            logger.debug(f"Temperature cooled (simple annealing): {old_T:.3f} -> {self.params['T']:.3f}")
+            
+        elif self.params['cool_then_heat']:
+            if self.params['heating_phase']:
+                # Heating phase
+                if (self.params['heating_iterations'] >= 45 or 
+                    self.params['T'] >= self.params['high_temp_threshold']):
+                    logger.info("Starting to cool the system")
+                    self.params['heating_phase'] = False
+                    self.params['cooling_iterations'] = 1
+                    self.params['T'] *= self.params['cooling_rate']
+                else:
+                    self.params['T'] /= self.params['cooling_rate']
+                    self.params['heating_iterations'] += 1
+            else:
+                # Cooling phase
+                if (self.params['cooling_iterations'] >= 45 or 
+                    self.params['T'] <= self.params['low_temp_threshold']):
+                    logger.info(f"Starting to heat the system. T threshold: {self.params['low_temp_threshold']:.3f}")
+                    self.params['heating_phase'] = True
+                    self.params['heating_iterations'] = 1
+                    self.params['T'] /= self.params['cooling_rate']
+                else:
+                    self.params['T'] *= self.params['cooling_rate']
+                    self.params['cooling_iterations'] += 1
+                    
+        else:  # Adaptive temperature with phase transitions
+            if self.active_phase_transition and (iteration > self.last_phase_transition + self.params['patience_phase_trans']):
+                self.params['T'] *= self.params['heating_rate']
+                logger.debug(f"Temperature increased (phase transition): {old_T:.3f} -> {self.params['T']:.3f}")
+            elif self.last_phase_transition is None:
+                self.params['T'] *= self.params['cooling_rate']
+                logger.debug(f"Temperature cooled (no phase transition): {old_T:.3f} -> {self.params['T']:.3f}")
+            else:
+                cooling_factor = (np.square(self.params['cooling_rate']) * 
+                                self.params['cooling_rate'] if self.params['num_mutations'] < 4 
+                                else np.square(self.params['cooling_rate']))
+                self.params['T'] *= cooling_factor
+                logger.debug(f"Temperature cooled (normal): {old_T:.3f} -> {self.params['T']:.3f}")
+    
+    def optimize(self) -> Dict[str, Any]:
+        """Runs the optimization process."""
         logger.info("Starting optimization process")
         start_time = time()
+        
+        # Set initial thresholds after scoring first sequences if not provided
+        if self.params['score_threshold'] is None:
+            initial_scores = list(self.scored_sequences.values())
+            self.params['score_threshold'] = np.mean(initial_scores) + np.std(initial_scores)
+            self.params['reversal_threshold'] = np.mean(initial_scores) - np.std(initial_scores)
+            logger.info(f"Set score threshold to {self.params['score_threshold']:.3f}")
+            logger.info(f"Set reversal threshold to {self.params['reversal_threshold']:.3f}")
         
         for i in range(self.params['num_iter']):
             iter_start = time()
@@ -226,7 +388,6 @@ class ArbitraryPredictorOptimizer:
                 dedupe=True
             )
             self.timing_stats['sampling'].append(time() - sample_start)
-            logger.debug(f"Generated {len(mutation_strings)} sequences")
             
             # Score sequences
             score_start = time()
@@ -246,6 +407,20 @@ class ArbitraryPredictorOptimizer:
             self.mean_scores.append(mean_score)
             self.score_variances.append(score_var)
             
+            # Set initial score metrics after 10 iterations
+            if i == 10:
+                self.initial_score = np.mean(self.mean_scores)
+                logger.info(f"Initial average score: {self.initial_score:.3f}")
+            
+            # Check for phase transitions
+            if (not self.active_phase_transition and i > 10 and 
+                self.initial_score is not None):
+                self.detect_phase_transition(i)
+                
+            # Check for phase transition reversal
+            if self.active_phase_transition and i > self.last_phase_transition:
+                self.detect_phase_transition_reversal(i)
+                
             # Update temperature
             self.update_temperature(i, len(mutation_strings))
             self.sampler.update_boltzmann_distribution(
@@ -270,6 +445,7 @@ class ArbitraryPredictorOptimizer:
         logger.info(f"Optimization complete in {total_time:.2f} seconds")
         logger.info(f"Best score: {self.all_scores[best_idx]:.3f}")
         logger.info(f"Total unique sequences evaluated: {len(self.scored_sequences)}")
+        logger.info(f"Total phase transitions: {self.num_phase_transitions[-1]}")
         
         return {
             'best_sequence': self.all_sequences[best_idx],
@@ -280,6 +456,7 @@ class ArbitraryPredictorOptimizer:
                 'temperatures': self.temperatures,
                 'mean_scores': self.mean_scores,
                 'score_variances': self.score_variances,
+                'num_phase_transitions': self.num_phase_transitions,
                 'timing': {
                     'total_time': total_time,
                     'avg_sampling_time': np.mean(self.timing_stats['sampling']),
@@ -289,6 +466,36 @@ class ArbitraryPredictorOptimizer:
             }
         }
     
+    def _update_score_matrix(self, sequences: List[str], scores: List[float]):
+        """
+        Update score matrix with variance boosting option.
+        
+        Parameters:
+        -----------
+        sequences : List[str]
+            List of sequences that were scored
+        scores : List[float]
+            Corresponding scores for the sequences
+        """
+        # Update observation matrices
+        self._update_observation_matrices(sequences, scores)
+        
+        # Compute new score matrix
+        self.score_matrix = self.sum_of_scores_matrix / (self.mut_to_num_seqs_matrix + EPS)
+        
+        # Add variance boosting if enabled
+        if self.params['boost_mutations_with_high_variance'] and self.params['gamma'] > 0.0:
+            var_matrix = (self.sum_of_scores_squared_matrix / (self.mut_to_num_seqs_matrix + EPS) - 
+                         np.square(self.score_matrix))
+            var_matrix = np.clip(var_matrix, a_min=0, a_max=None)  # remove negative values
+            self.score_matrix += self.params['gamma'] * np.sqrt(var_matrix)
+        
+        # Update sampler with new matrix
+        self.sampler.update_boltzmann_distribution(
+            new_temperature=self.params['T'],
+            new_score_matrix=self.score_matrix
+        )
+
     def plot_optimization_history(self, save_path: Optional[str] = None):
         """
         Plot the optimization history including scores, temperature, and sequence diversity.
