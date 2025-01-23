@@ -24,4 +24,4 @@ test = ["coverage"]
 "Homepage" = "https://github.com/SoluLearn/BADASS/"
 
 [tool.setuptools]
-packages = ["badass"]
+packages = {find = {}}
